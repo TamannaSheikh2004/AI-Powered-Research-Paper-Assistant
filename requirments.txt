@@ -1,0 +1,9 @@
+streamlit
+python-dotenv
+requests
+python-docx
+Pillow
+matplotlib
+PyPDF2
+reportlab
+docx2pdf
