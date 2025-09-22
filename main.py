@@ -1,46 +1,42 @@
+# main.py
 import os
-import google.generativeai as genai
 from dotenv import load_dotenv
-import PyPDF2
+import requests
+import json
 
-# Load API key
 load_dotenv()
-genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
+MISTRAL_API_KEY = os.getenv("MISTRAL_API_KEY", "").strip()
+if not MISTRAL_API_KEY:
+    print("MISTRAL_API_KEY missing in .env")
+    exit(1)
 
-# Ask user for input
-topic = input("Enter your research topic: ")
-keywords = input("Enter keywords (comma separated): ")
-
-use_pdf = input("Do you have a PDF format template? (yes/no): ").strip().lower()
-
-pdf_structure = ""
-if use_pdf == "yes":
-    pdf_path = input("Enter path to your PDF template (e.g., C:/Users/admin/Desktop/template.pdf): ")
+def generate_text_mistral(prompt: str, model: str = "mistral-large-latest", max_tokens: int = 1200):
+    url = "https://api.mistral.ai/v1/chat/completions"
+    headers = {"Authorization": f"Bearer {MISTRAL_API_KEY}", "Content-Type": "application/json"}
+    body = {
+        "model": model,
+        "messages": [{"role": "user", "content": prompt}],
+        "max_tokens": max_tokens,
+        "temperature": 0.2
+    }
+    r = requests.post(url, headers=headers, json=body, timeout=60)
+    r.raise_for_status()
+    j = r.json()
     try:
-        with open(pdf_path, "rb") as pdf_file:
-            reader = PyPDF2.PdfReader(pdf_file)
-            for page in reader.pages:
-                pdf_structure += page.extract_text() + "\n"
-        print("✅ PDF template loaded successfully!")
-    except Exception as e:
-        print("⚠️ Error reading PDF:", e)
-        pdf_structure = "Use a simple academic research paper structure."
-else:
-    pdf_structure = "Use a standard academic format with Abstract, Introduction, Literature Review, Methodology, Conclusion, References."
+        return j["choices"][0]["message"]["content"].strip()
+    except Exception:
+        return json.dumps(j, indent=2)[:2000]
 
-# Create prompt
-prompt = f"""
-You are an AI-powered Research Paper Assistant.
-Generate a research paper draft on the topic: {topic}.
-Keywords: {keywords}.
-Follow this format structure:
-{pdf_structure}
-"""
-
-# Use Gemini
-model = genai.GenerativeModel("gemini-1.5-flash")
-response = model.generate_content(prompt)
-
-# Print result
-print("\n===== AI-Generated Research Paper Draft =====\n")
-print(response.text)
+if __name__ == "__main__":
+    topic = input("Enter your research topic: ").strip()
+    if not topic:
+        print("No topic entered.")
+        exit(1)
+    prompt = f"Generate a compact research-paper style draft on: {topic}\nUse headings: Abstract, Introduction, Literature Review, Methodology, Results, Discussion, Conclusion, References."
+    print("Generating...")
+    out = generate_text_mistral(prompt)
+    print("\n===== DRAFT =====\n")
+    print(out)
+    with open("mistral_draft.txt", "w", encoding="utf-8") as wf:
+        wf.write(out)
+    print("\nSaved draft to mistral_draft.txt")
